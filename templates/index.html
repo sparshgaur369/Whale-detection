@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="rgb(242 242 242)">
+    <meta name="theme-color" content="rgb(17 17 17)">
+    <!-- <link rel="stylesheet" href="style.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <!-- <script src="./preloader/bigBang.js"></script> -->
+    <script src="{{ url_for('static', filename='js/bigBang.js') }}"></script>
+    <title>Whale Detection System</title>
+</head>
+<body data-theme="light">
+
+    <!-- canva used for drawing the preloader -->
+
+    <canvas id="bigbang"></canvas>
+
+    <!-- fragment shader for positionning all particle in bigbang preloader -->
+
+	<script id="shader-fs" type="x-shader/x-fragment">
+		#ifdef GL_ES
+		precision highp float;
+		#endif
+		void main(void) {
+			gl_FragColor = vec4(0.2, 0.3, 0.4, 1.0);
+		}
+	</script>
+
+    <!-- vertex shader for positionning all particle in bigbang preloader  -->
+
+	<script id="shader-vs" type="x-shader/x-vertex">
+		attribute vec3 vertexPosition;
+
+		uniform mat4 modelViewMatrix;
+		uniform mat4 perspectiveMatrix;
+
+		void main(void) {
+			gl_Position = perspectiveMatrix * modelViewMatrix * vec4(  vertexPosition, 1.0);
+		}
+    </script>
+
+    <!-- Navbar  -->
+
+    
+
+   
+        
+    
+
+
+    <!-- <section class="home">
+        <div>
+            <h1></h1><span class="second-title">HandiCop</span>
+            <p>vous souhaite<span>la bienvenue</span></p>
+        </div>
+    </section> -->
+    <!-- <section class="home">
+        <form id="imageUploadForm" enctype="multipart/form-data">
+            <div class="upload-container">
+                <label for="imageInput" class="upload-label">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h2 class="upload-heading">Upload an Image of Elephants</h2>
+                    <p class="upload-description">Click to select or drag and drop an image</p>
+                    <input type="file" id="imageInput" class="upload-input" accept="image/*" />
+                </label>
+                <div class="image-preview-container">
+                    <img id="imagePreview" src="" alt="Image Preview" class="image-preview" />
+                </div>
+            </div>
+        </form>
+    </section> -->
+    <!-- <section class="home">
+        <form id="imageUploadForm" action="/" method="post" enctype="multipart/form-data">
+            <div class="upload-container">
+                <label for="imageInput" class="upload-label">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h2 class="upload-heading">Upload an Image of Whales</h2>
+                    <p class="upload-description">Click to select or drag and drop an image</p>
+                    <input type="file" id="imageInput" class="upload-input" accept="image/*" />
+                  
+                </label>
+                <div class="image-preview-container">
+                    <img id="imagePreview" src="" alt="Image Preview" class="image-preview" />
+                </div>
+            </div>
+        </form>
+    </section>  -->
+
+    
+    
+    <!-- <form action="/" method="post" enctype="multipart/form-data">
+        <input type="file" name="images" multiple required>
+        <button type="submit">Upload & Detect</button>
+    </form> -->
+
+    <!-- <section class="home">
+
+    
+
+    <h2>Whale Detection System</h2>
+
+<form action="/" method="post" enctype="multipart/form-data">
+    <label class="custom-file-upload">
+        <input type="file" name="images" multiple required>
+        Choose Files
+    </label>
+    <button type="submit">Upload & Detect</button>
+</form>
+
+
+
+
+
+
+   
+
+</section>
+
+<section class="result">
+
+
+
+{% if results %}
+<h3>Results</h3>
+<table border="1">
+    <tr>
+        <th>Image</th>
+        <th>Detections</th>
+        <th>Outlier</th>
+    </tr>
+    {% for result in results %}
+    <tr>
+        <td>{{ result["Image"] }}</td>
+        <td>{{ result["Detections"] }}</td>
+        <td>{{ "Yes" if result["Outlier"] else "No" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+<a href="{{ url_for('download_csv') }}">Download Results (CSV)</a>
+{% endif %}
+</section> -->
+    
+
+<section class="home {% if results %}hiddenn{% endif %}">
+    <h2 class="{% if results %}hidden{% endif %}">Whale Detection System</h2>
+
+    <!-- Form will be hidden if results are present -->
+    <form action="/" method="post" enctype="multipart/form-data" class="{% if results %}hiddenn{% endif %}">
+        <label class="custom-file-upload">
+            <input type="file" name="images" multiple required>
+            Choose Files
+        </label>
+        <button class="buttonupload " type="submit">Upload & Detect</button>
+    </form>
+</section>
+
+<section class="result ">
+    {% if results %}
+    <h3> Whale Detection System: </h3>
+    <br>
+    <h3> Result </h3>
+    
+    <table border="1">
+        <tr>
+            <th>Image</th>
+            <th>Detections</th>
+            <th>Outlier</th>
+        </tr>
+        {% for result in results %}
+        <tr>
+            <td>{{ result["Image"] }}</td>
+            <td>{{ result["Detections"] }}</td>
+            <td>{{ "Yes" if result["Outlier"] else "No" }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="{{ url_for('download_csv') }}" class="download-btn">Download Results (CSV)</a>
+    {% endif %}
+</section>
+<br>
+<br>
+    
+    <script>
+        // Select the image input and preview elements
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.querySelector('.image-preview-container');
+
+        // Add an event listener for the file input change event
+        imageInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];  // Get the first selected file
+
+            if (file) {
+                // Check if the selected file is an image
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();  // Create a FileReader instance
+
+                    // When the file is loaded by the reader, update the image preview
+                    reader.onload = function (event) {
+                        imagePreview.src = event.target.result;  // Set the preview image source to the file data
+                        imagePreviewContainer.style.display = 'block';  // Display the image preview container
+                    };
+
+                    reader.readAsDataURL(file);  // Read the file as a data URL (base64 encoded image)
+                } else {
+                    alert("Please upload a valid image file.");  // Alert if the file is not an image
+                }
+            }
+        });
+    </script>
+    <!-- <script src="app.js"></script> -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
