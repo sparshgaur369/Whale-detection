@@ -25,4 +25,5 @@ COPY . .
 RUN mkdir -p model uploads results
 
 # Command to run the application
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT:-8080}", "--workers", "1", "--timeout", "120"]
+#CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT:-8080}", "--workers", "1", "--timeout", "120"]
+CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120"]
