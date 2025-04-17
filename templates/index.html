@@ -143,10 +143,19 @@
 </section> -->
     
 
-<section class="home {% if results %}hiddenn{% endif %}">
+<!-- <section class="home {% if results %}hiddenn{% endif %}">
     <h2 class="{% if results %}hidden{% endif %}">Whale Detection System</h2>
 
-    <!-- Form will be hidden if results are present -->
+    {% with messages = get_flashed_messages(with_categories=True) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} text-center">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+   
+
     <form action="/" method="post" enctype="multipart/form-data" class="{% if results %}hiddenn{% endif %}">
         <label class="custom-file-upload">
             <input type="file" name="images" multiple required>
@@ -155,6 +164,11 @@
         <button class="buttonupload " type="submit">Upload & Detect</button>
     </form>
 </section>
+{% if disaster_warning %}
+            <div class="alert alert-danger text-center">
+                🚨 Unusual whale activity detected! Possible natural disaster alert! 🌊
+            </div>
+        {% endif %}
 
 <section class="result ">
     {% if results %}
@@ -180,7 +194,99 @@
     {% endif %}
 </section>
 <br>
-<br>
+<br> -->
+
+<!-- {% if disaster_warning %}
+            <div class="alert alert-danger text-center">
+                🚨 Unusual whale activity detected! Possible natural disaster alert! 🌊
+            </div>
+        {% endif %} -->
+
+
+
+
+
+
+
+
+
+
+
+
+        <section class="home {% if results %}hiddenn{% endif %}">
+            <h2 class="{% if results %}hidden{% endif %}">Whale Detection System</h2>
+            
+            
+            <!-- <form action="/" method="post" enctype="multipart/form-data" class="my-3">
+                <input type="file" name="images" multiple class="form-control mb-3">
+                <button type="submit" class="btn btn-primary">Upload & Analyze</button>
+            </form> -->
+            <form action="/" method="post" enctype="multipart/form-data" class="{% if results %}hiddenn{% endif %}">
+                <label class="custom-file-upload">
+                    <input type="file" name="images" multiple required>
+                    Choose Files
+                </label>
+                <button class="buttonupload " type="submit">Upload & Detect</button>
+            </form>
+    
+            
+            {% with messages = get_flashed_messages(with_categories=True) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} text-center">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            </section>
+            <section class="result">
+    
+            
+            {% if results %}
+            {% if disaster_warning %}
+                <div class="alert alert-danger text-center" style="color: white;">
+                    🚨 Unusual whale activity detected! Possible natural disaster alert! 🌊
+                </div>
+            {% endif %}
+            <h3> Whale Detection System: </h3>
+            <br>
+            <h3> Result </h3>
+            
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Image Name</th>
+                        <th>Whale Count</th>
+                        <th>Outlier</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in results %}
+                    <tr>
+                        <td>{{ row['Image'] }}</td>
+                        <td>{{ row['Detections'] }}</td>
+                        <td>{{ row['Outlier'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+    
+            <!-- Alert for Natural Disaster -->
+            {% if disaster_warning %}
+                <div class="alert alert-danger text-center" style="color: white;">
+                    🚨 Unusual whale activity detected! Possible natural disaster alert! 🌊
+                </div>
+            {% endif %}
+
+            <br>
+            <br>
+    
+            <!-- Download Button -->
+            <a href="{{ url_for('download_csv') }}" class="download-btn">Download Results(CSV)</a>
+            {% endif %}
+            <br>
+            <br>
+        </section>
     
     <script>
         // Select the image input and preview elements
