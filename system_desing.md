@@ -841,3 +841,97 @@ Key relationships enabling the sync architecture:
 *   **Queueing**: For extremely high usage, a dedicated message queue (e.g., BullMQ) between Webhook and Sync Engine would be better than `waitUntil`.
 
 
+# Email Sync System: Architecture (Simplified)
+
+## 1. The Core Concept
+The MailWebAI sync system creates a "digital twin" of your email inbox in our database. It ensures that every email, thread, and attachment in your provider (Gmail, Outlook) is mirrored instantly in our application.
+
+## 2. How Emails Enter the System
+
+There are two primary ways emails flow into our application:
+
+### A. Initial Sync (The First Connection)
+When a user links their account, we need to catch up on history.
+1.  **Job Start**: We trigger a background job to fetch emails from the **last 3 days**.
+2.  **Pagination**: We fetch pages of emails until we have them all.
+3.  **Checkpoint**: We save a `nextDeltaToken` (a bookmark) so we know exactly where we left off.
+
+### B. Live Sync (Real-Time Updates)
+After the initial sync, we rely on **Webhooks** to stay up-to-date instantly.
+1.  **Notification**: Aurinko sends a "ping" to our webhook URL (`/api/aurinko/webhook`) whenever a new email arrives or is modified.
+2.  **Verification**: We check a secret security signature (`X-Aurinko-Signature`) to ensure the request is legitimate.
+
+## 3. The Journey of a New Email (Step-by-Step)
+
+Here is the exact technical flow when a new email arrives:
+
+### Step 1: The "Knock" (Webhook & Deduplication)
+*   **Problem**: Webhooks sometimes fire twice for the same event (retries).
+*   **Solution**: We use **Redis** to check if we've seen this event ID in the last 5 minutes.
+    *   **If Yes**: Ignore it (prevent double processing).
+    *   **If No**: Proceed and lock the ID.
+
+### Step 2: Fetching the Changes (Sync Engine)
+*   We use the stored `deltaToken` (bookmark) to ask Aurinko: *"Give me everything that changed since the last time I checked."*
+*   This is much faster and more efficient than fetching all emails again.
+
+### Step 3: Saving to Database (Postgres)
+This happens in `syncEmailsToDatabase`. We process emails in batches (concurrency limit: 10).
+
+1.  **Extract People**: We verify and save every email address (From, To, CC) into the `EmailAddress` table.
+2.  **Update Thread**: We update the conversation's `lastMessageDate` and status.
+    *   *Logic*: If **any** email in a thread is in "Inbox", the entire thread is marked as "Inbox".
+3.  **Save Email**: We store the subject, body, snippet, and labels.
+
+### Step 4: Making it Smart (AI & Search)
+Immediately after saving, we process the email for AI features:
+
+1.  **Translation**: Convert HTML content -> Markdown (clean text for AI).
+2.  **Embeddings**: Send the text to **OpenAI** (`text-embedding-ada-002`) to begin understanding the content (turn text into vectors).
+    *   *Note*: This happens in a "Low Priority" queue to avoid hitting API rate limits.
+3.  **Index**: Save the vectors into **Orama** (our blazing-fast search engine) so you can search by meaning, not just keywords.
+
+### Step 5: Clean Up (Cache Invalidation)
+*   We clear the **Redis Cache** for the user's thread list.
+*   The next time the frontend loads, it fetches the fresh data from the database.
+
+## 4. Key Technologies (The "Why")
+
+| Tech | Role | Why we use it |
+| :--- | :--- | :--- |
+| **Aurinko** | The Mailman | Handles complex connections to Gmail/Outlook APIs. |
+| **Redis** | Short-Term Memory | **Deduplication** (webhooks) and **Caching** (fast UI). |
+| **Postgres** | Long-Term Memory | Reliable storage for users, threads, and emails. |
+| **OpenAI** | The Brain | Creates "embeddings" to understand email context. |
+| **Orama** | The Search Engine | specialized database for vector/AI search. |
+
+## 5. Visual Flow
+
+```mermaid
+graph TD
+    subgraph "1. Ingestion"
+        A[Incoming Webhook] -->|Check Signature| B(Is Valid?)
+        B -- Yes --> C{Seen ID in Redis?}
+        C -- No --> D[Lock Event ID]
+    end
+
+    subgraph "2. Processing"
+        D -->|Fetch Changes| E[Get Emails from Aurinko]
+        E -->|Extract Addresses| F[Save People (From/To)]
+        F -->|Upsert Thread| G[Update Conversation Status]
+        G -->|Upsert Email| H[Save Email Body & Meta]
+    end
+
+    subgraph "3. AI Enrichment"
+        H -->|Convert to Markdown| I[Turndown]
+        I -->|Generate Vectors| J[OpenAI Embeddings]
+        J -->|Save Index| K[Orama Search DB]
+    end
+
+    subgraph "4. Cleanup"
+        H -->|Clear Cache| L[Invalidate Redis Keys]
+    end
+```
+
+
+
