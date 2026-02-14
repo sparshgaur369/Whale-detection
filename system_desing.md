@@ -629,7 +629,7 @@ flowchart TB
 
 The following diagram illustrates the high-level architecture of the MailWebAI project, detailing the interactions between the client, external services, application layer, and data layer.
 
-```
+```sscsc
 graph TD
     subgraph "Client Layer"
         User[User Browser]
