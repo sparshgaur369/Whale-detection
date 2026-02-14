@@ -629,7 +629,7 @@ flowchart TB
 
 The following diagram illustrates the high-level architecture of the MailWebAI project, detailing the interactions between the client, external services, application layer, and data layer.
 
-```mermaid
+```
 graph TD
     subgraph "Client Layer"
         User[User Browser]
@@ -643,8 +643,8 @@ graph TD
         S3[AWS S3 Attachments]
     end
 
-    subgraph "Application Layer (Next.js)"
-        AuthMiddleware[Middleware (Clerk)]
+    subgraph "Application Layer - Next.js"
+        AuthMiddleware["Middleware - Clerk"]
         TRPC[tRPC API Routes]
         Webhooks[Webhook Handlers]
         AICore[AI Assistant / RAG]
@@ -688,6 +688,7 @@ graph TD
     Stripe -->|Webhook| Webhooks
     Webhooks -->|Update Subscription| Postgres
 ```
+
 
 ## Key Components
 
