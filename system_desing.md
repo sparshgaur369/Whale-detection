@@ -629,7 +629,7 @@ flowchart TB
 
 The following diagram illustrates the high-level architecture of the MailWebAI project, detailing the interactions between the client, external services, application layer, and data layer.
 
-```sscsc
+```mermaid
 graph TD
     subgraph "Client Layer"
         User[User Browser]
@@ -717,4 +717,127 @@ graph TD
 
 6.  **Payments**:
     *   **Stripe**: Manages subscriptions and payment processing. Webhooks update user subscription status in the database.
+  
+# Email Sync System Architecture
+
+## 1. Overview
+The Email Sync system in MailWebAI is designed to provide a real-time, bidirectional mirror of the user's email account. It leverages **Aurinko** as the unified email API provider (supporting Google, Office365, etc.) and employs a multi-stage synchronization pipeline to ensure data consistency, performance, and AI-readiness.
+
+## 2. High-Level Architecture
+
+The system operates in two distinct modes: **Initial Sync** (bootstrapping) and **Delta Sync** (real-time updates via webhooks).
+
+```mermaid
+graph TD
+    subgraph "External Providers"
+        Aurinko[Aurinko API]
+        OpenAI[OpenAI API]
+    end
+
+    subgraph "Ingestion Layer"
+        Webhook["Webhook Handler (/api/aurinko/webhook)"]
+        InitialSync["Initial Sync Endpoint (/api/initial-sync)"]
+        Dedup[Redis Deduplication]
+    end
+
+    subgraph "Processing Layer (Sync Engine)"
+        Account[Account Class]
+        SyncLoop[Pagination & Delta Loop]
+        Turndown[HTML to Markdown]
+        Embedding[Embedding Generator]
+    end
+
+    subgraph "Storage Layer"
+        Postgres[(PostgreSQL - Prisma)]
+        Orama[(Orama - Vector DB)]
+        Redis[(Redis - Cache & Rate Limits)]
+    end
+
+    %% Flows
+    Aurinko -->|Webhook Notification| Webhook
+    Webhook -->|Check Event ID| Dedup
+    Dedup -->|If New| Account
+
+    InitialSync -->|Start Job| Account
+    Account -->|Fetch Emails| Aurinko
+    Account -->|Parse & Normalize| SyncLoop
+
+    SyncLoop -->|Upsert Data| Postgres
+    SyncLoop -->|Generate Vector| Turndown
+    Turndown -->|Get Embedding| Embedding
+    Embedding -->|Request| OpenAI
+    Embedding -->|Store Vector| Orama
+
+    SyncLoop -->|Invalidate Views| Redis
+```
+
+## 3. Core Components
+
+### 3.1. Aurinko Integration (`src/lib/account.ts`)
+*   **Provider**: Aurinko is used as the middleware to abstract IMAP/Graph API complexities.
+*   **Authentication**: Uses Bearer tokens associated with the `Account` model in the database.
+*   **Sync Strategy**:
+    *   **Initial Sync**: Fetches emails from the last **3 days** (configurable). Polling mechanism checks for job completion (`ready` status).
+    *   **Delta Sync**: Uses `deltaToken` to fetch only changes since the last sync.
+
+### 3.2. Webhook Handling (`src/app/api/aurinko/webhook/route.ts`)
+*   **Security**: Validates `X-Aurinko-Signature` using HMAC-SHA256 and the `AURINKO_SIGNING_SECRET`.
+*   **Deduplication** (`src/lib/sync-dedup.ts`):
+    *   Uses **Redis** (`setNX`) to prevent processing the same webhook event multiple times.
+    *   Key format: `sync:dedup:{accountId}:{eventId}`.
+    *   TTL: 5 minutes.
+*   **Trigger**: Instantiates the `Account` class and triggers `syncEmails()`.
+
+### 3.3. Sync Engine & Data Processing (`src/lib/sync-to-db.ts`)
+The core logic resides in `syncEmailsToDatabase`. It processes batches of emails with controlled concurrency.
+
+*   **Concurrency**: Uses `p-limit` to process up to **10 emails concurrently** during DB upserts.
+*   **Address Normalization**:
+    *   Extracts all unique email addresses (From, To, Cc, Bcc, ReplyTo) from a batch.
+    *   Upserts them to the `EmailAddress` table first to ensure foreign key integrity.
+*   **Thread Management**:
+    *   Upserts `Thread` records given the `threadId` from Aurinko.
+    *   Updates `lastMessageDate` and participant lists.
+    *   **Folder Inference**: Determines if a thread is `inbox`, `sent`, or `draft` based on the labels of the emails contained within it.
+*   **Email Storage**:
+    *   Upserts `Email` records with full metadata (Subject, Body, snippet, etc.).
+    *   Maps Aura-specific labels (e.g., `sysLabels`) to internal enums/booleans.
+
+### 3.4. AI & Search Pipeline (`src/lib/sync-to-db.ts`, `src/lib/embeddings.ts`)
+Every synced email is immediately prepared for RAG (Retrieval-Augmented Generation) and Semantic Search.
+
+1.  **Text Extraction**: `turndown` library converts HTML email bodies to Markdown for cleaner LLM context.
+2.  **Embedding Generation**:
+    *   Uses `text-embedding-ada-002` via OpenAI.
+    *   Request payload construction: `From: ... \n To: ... \n Subject: ... \n Body: ...`
+    *   **Rate Limiting**: Embeddings are requested with `'low'` priority using the custom `OpenAIRateLimiter` to prevent saturating API quotas during bulk syncs.
+3.  **Vector Storage**:
+    *   **Orama**: A specialized vector database instance is initialized per user account (`OramaManager`).
+    *   Inserts vectors alongside metadata (Thread ID, Timestamp) for hybrid search.
+
+### 3.5. Caching & Invalidation (`src/lib/email-cache.ts`)
+*   **Post-Sync**: Once a sync batch is complete, `invalidateThreadCaches(accountId)` is called.
+*   **Mechanism**: Deletes Redis keys matching patterns for thread lists to ensure the frontend displays the latest data immediately.
+
+## 4. Data Model (Prisma)
+
+Key relationships enabling the sync architecture:
+
+*   **Account**: Stores the `token` and `nextDeltaToken` (cursor).
+*   **Thread**: Aggregates emails. Has computed flags (`inboxStatus`, `draftStatus`, `sentStatus`) for efficient querying.
+*   **EmailAddress**: Normalized entity to allow graph-like queries (e.g., "all emails from X").
+*   **Email**: The raw message unit. Stores `internetMessageId` for deduplication and `sysLabels` for folder categorization.
+
+## 5. Error Handling & Resilience
+
+*   **Webhook Retries**: Handled by Aurinko. Our deduplication logic ensures idempotency.
+*   **Sync Failures**: 
+    *   If `performInitialSync` fails, it logs the error and returns.
+    *   Individual email processing errors (e.g., Prisma unique constraint race conditions) are caught and logged, preventing the entire batch from failing.
+*   **Token Expiry**: Handled by the upstream `Account` class (not fully visible in sync logic but assumed handled during Aurinko API calls). 
+
+## 6. Future Considerations / Scalability Limits
+*   **Orama Persistence**: Currently, Orama indices might need to be persisted to disk or S3 to survive cold boots effectively if not using a cloud version.
+*   **Queueing**: For extremely high usage, a dedicated message queue (e.g., BullMQ) between Webhook and Sync Engine would be better than `waitUntil`.
+
 
