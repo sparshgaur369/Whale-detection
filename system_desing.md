@@ -621,3 +621,99 @@ flowchart TB
 | **Deploy** | Cloud Run + Cloud Build | Container hosting, CI/CD |
 | **Container** | Docker (node:20) | Containerization |
 | **Editor** | Novel (Tiptap) | Rich text composition |
+
+
+
+
+# System Architecture
+
+The following diagram illustrates the high-level architecture of the MailWebAI project, detailing the interactions between the client, external services, application layer, and data layer.
+
+```mermaid
+graph TD
+    subgraph "Client Layer"
+        User[User Browser]
+    end
+
+    subgraph "External Services"
+        Clerk[Clerk Auth]
+        Aurinko[Aurinko Email Engine]
+        OpenAI[OpenAI LLM & Embeddings]
+        Stripe[Stripe Payments]
+        S3[AWS S3 Attachments]
+    end
+
+    subgraph "Application Layer (Next.js)"
+        AuthMiddleware[Middleware (Clerk)]
+        TRPC[tRPC API Routes]
+        Webhooks[Webhook Handlers]
+        AICore[AI Assistant / RAG]
+        SyncEngine[Sync Logic]
+    end
+
+    subgraph "Data Layer"
+        Postgres[(PostgreSQL - Prisma)]
+        Redis[(Redis - Upstash)]
+        Orama[(Orama - Vector Search)]
+    end
+
+    %% Auth Flows
+    User -->|Auth Redirect| Clerk
+    Clerk -->|Session Token| AuthMiddleware
+    AuthMiddleware -->|Protected Access| TRPC
+
+    %% User Interactions
+    User -->|View Threads/Mails| TRPC
+    TRPC -->|Read/Write| Postgres
+    TRPC -->|Cache Hit/Miss| Redis
+
+    %% Sync Flows
+    Aurinko -->|New Email Webhook| Webhooks
+    Webhooks -->|Trigger Sync| SyncEngine
+    SyncEngine -->|Store Emails| Postgres
+    SyncEngine -->|Update Index| Orama
+    SyncEngine -->|Invalidate Cache| Redis
+    SyncEngine -->|Upload Attachments| S3
+
+    %% AI Flows
+    User -->|Ask Question| TRPC
+    TRPC -->|Process Request| AICore
+    AICore -->|Generate Embedding| OpenAI
+    AICore -->|Vector Search| Orama
+    AICore -->|Generate Response| OpenAI
+    AICore -->|Context Retrieval| Postgres
+
+    %% Payment Flows
+    User -->|Subscribe| Stripe
+    Stripe -->|Webhook| Webhooks
+    Webhooks -->|Update Subscription| Postgres
+```
+
+## Key Components
+
+1.  **Frontend (Client Layer)**:
+    *   Built with **Next.js 14 App Router** using React Server Components.
+    *   Interacts with the backend primarily via **tRPC**.
+
+2.  **Authentication**:
+    *   **Clerk**: Handles user authentication, session management, and secure access control.
+    *   **Middleware**: Intercepts requests to ensure valid sessions before access to protected routes.
+
+3.  **Email Engine**:
+    *   **Aurinko**: Connects to email providers (Google, Office365) and synchronizes data.
+    *   **Webhooks**: Received from Aurinko trigger real-time sync processes in the application.
+
+4.  **Backend Services (Application Layer)**:
+    *   **tRPC API Routes**: Type-safe API endpoints for client-server communication.
+    *   **Sync Engine**: Handles the logic for processing incoming emails, storing them, and updating search indexes.
+    *   **AI Core (RAG)**: Retrieves relevant context using vector search and generates responses via OpenAI.
+
+5.  **Data & Storage**:
+    *   **PostgreSQL (Prisma)**: Primary database for persistent storage (Users, Threads, Emails).
+    *   **Redis (Upstash)**: Provides caching for performance (e.g., thread lists) and manages API rate limits.
+    *   **Orama**: specialized vector database for semantic search across emails.
+    *   **AWS S3**: Secure object storage for email attachments.
+
+6.  **Payments**:
+    *   **Stripe**: Manages subscriptions and payment processing. Webhooks update user subscription status in the database.
+
