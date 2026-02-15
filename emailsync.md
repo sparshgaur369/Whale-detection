@@ -1,10 +1,3 @@
-Read Me: 
-•	How to set it up and run it locally
-•	Architecture decisions and trade-offs you made
-•	Screenshots or a short video demo showing the assistant controlling the UI
-•	What you’d improve with more time
-
-
 # MailWebAI
 
 AI-powered modern email client, fully scalable and low latency made with NextJS, Typescript, TailwindCSS, Vercel AI SDK, Clerk, Prisma, Postgre, Aurinko, OpenAI, Stripe, AWS S3, Redis, GCP, Docker. 
@@ -16,18 +9,35 @@ AI-powered modern email client, fully scalable and low latency made with NextJS,
 🔗 **Live URL:**  
 https://mailwebai-1041705652651.europe-west2.run.app/
 
+> ⚠️ **Alert:** After logging in and linking your Gmail account, you may be redirected to `http://localhost:8080/mail`.  
+> I am currently resolving this redirect issue.  
+> If this happens, please manually navigate back to:  
+> https://mailwebai-1041705652651.europe-west2.run.app/mail  
+> Your email account will already be linked there.
+
 ---
 
 ## 🎥 Demo Video
 
-[![Watch the Demo](https://img.youtube.com/vi/EzRF8CcpC7k/0.jpg)](https://www.youtube.com/watch?v=EzRF8CcpC7k)
-
+[![Watch the Demo](https://img.youtube.com/vi/EzRF8CcpC7k/maxresdefault.jpg)](https://www.youtube.com/watch?v=EzRF8CcpC7k)
 
 ---
 
 ## 🏗 System Architecture Walkthrough
 
 [![Watch Architecture Explanation](https://img.youtube.com/vi/ahbh/0.jpg)](https://www.youtube.com/watch?v=ahbh)
+
+
+- 🏗️ **Application Architecture**  
+  → [View Documentation](APP_ARCHITECTURE.md)
+- 🤖 **AI Assistant Architecture**  
+  → [View Documentation](AI_ASSISTANT_ARCHITECTURE.md)
+- 🔄 **Email Sync Architecture**  
+  → [View Documentation](EMAIL_SYNC_ARCHITECTURE.md)
+- 🚦 **API Rate Limit Architecture**  
+  → [View Documentation](API_RATE_LIMIT_ARCHITECTURE.md)
+- 📤 **Email Sending Architecture**  
+  → [View Documentation](EMAIL_SENDING_ARCHITECTURE.md)
 
 ---
 
